@@ -2,7 +2,7 @@
 
 DNS64 server with DNSSEC support.
 
-## Compilation using G++:
+## Compilation using G++
 
 ```
 /usr/bin/g++ -Wall -Werror -Wextra -pedantic ./*.cc -lpthread -lssl -lcrypto -std=c++17 -I. -o ./dns64sec
@@ -14,7 +14,7 @@ The first position parameter can be used to set the location of the configuratio
 
 The default configuration file is located at: ```/etc/dns64sec.conf```
 
-## Configuration options:
+## Configuration options
 
 ### attempts
 
