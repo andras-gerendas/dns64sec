@@ -16,7 +16,7 @@ The default configuration file is located at: ```/etc/dns64sec.conf```
 
 ## Configuration file format
 
-The configuration file is a list of options, each option is listed as a different line. The option lines start with the name of the option, then a colon (:), a space, and the value of the option. The format of the option value depends on the option.
+The configuration file is a list of options, each option is listed on a separate line. The option lines start with the name of the option, then a colon (:), a space, and the value of the option. The format of the option value depends on the option.
 
 Listing each of the options is not mandatory, the order of the options listed is of no significance, and lines containing comments need to start with the hash-mark (#) character at the beginning of the line. A commented line means that the line will be ignored when the configuration is parsed.
 
