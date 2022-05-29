@@ -142,4 +142,4 @@ timeout: 1000
 
 ## Syslog handling
 
-The program writes into the configuration using the ```LOG_DAEMON``` facility.
+The program writes into syslog using the ```LOG_DAEMON``` facility.
