@@ -2,11 +2,19 @@
 
 DNS64 server with DNSSEC support.
 
-## Compilation using G++
+## Compilation using make
+
+### Compilation
 
 ```
-/usr/bin/g++ -Wall -Werror -Wextra -pedantic ./*.cc -lpthread -lssl -lcrypto -std=c++17 -I. -o ./dns64sec
+make
 ```
+
+### Cleanup
+
+```
+make clean
+``` 
 
 ## Command line parameters
 
@@ -37,6 +45,12 @@ timeout: 1000
 - Meaning: The number of attempts a resolver is tried in a request-response exchange before the next one is attempted (including the initial one).
 - Default value: 3
 - Type: A number between 1 and 10 inclusive
+
+### diag_timer_interval
+
+- Meaning: Every time the amount of seconds specified by the interval configuration elapses, the diagnostic information is printed to syslog if the ```use_diag_timer``` setting is active.
+- Default value: 3
+- Type: A number between 1 and 60 inclusive
 
 ### enforce_dnssec
 
@@ -121,6 +135,12 @@ timeout: 1000
 - Meaning: The size of the buffer in bytes (effectively the maximum UDP payload size) used to send and receive DNS requests. Larger buffers than 512 bytes are achieved using the EDNS(0) extension. Beware of fragmentation if a large value is used. The value of the option must be at least 512.
 - Default value: 512
 - Type: 16-bit unsigned integer
+
+### use_diag_timer
+
+- Meaning: Whether to activate the diagnostic timer, which prints diagnostic information to syslog every ```diag_timer_interval``` seconds for troubleshooting.
+- Default value: false
+- Type: boolean (true/false)
 
 ### validate_dnssec
 
