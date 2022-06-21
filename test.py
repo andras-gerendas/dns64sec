@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 
+"""
+@file test.py
+@author Andras Attila Gerendas
+@brief Test framework and test cases for functional testing
+@version 0.1
+@date 2022-06-21
+
+@copyright Copyright (c) 2022
+"""
+
 from scapy.all import *
 from threading import Thread
 import sys

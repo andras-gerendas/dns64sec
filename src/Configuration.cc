@@ -1,3 +1,14 @@
+/**
+ * @file Configuration.cc
+ * @author Andras Attila Gerendas
+ * @brief Configuration handling class
+ * @version 0.1
+ * @date 2022-06-21
+ *
+ * @copyright Copyright (c) 2022
+ *
+ */
+
 #include "Configuration.h"
 
 #include <cctype>
@@ -12,34 +23,45 @@
 #include <thread>
 
 void Configuration::addResolver(const std::string& resolver) {
-        struct sockaddr_storage addr{};
+    struct sockaddr_storage addr {};
 
-        const char *server_name_c = resolver.c_str();
+    const char *server_name_c = resolver.c_str();
 
-        if (1 != inet_pton(AF_INET, server_name_c, &(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr))) {
-            if (1 != inet_pton(AF_INET6, server_name_c, &(reinterpret_cast<sockaddr_in6*>(&addr)->sin6_addr))) {
-                syslog(LOG_INFO, "Address cannot be used as an IPv4/IPv6 address: %s", server_name_c);
-                return;
-            }
-            addr.ss_family = AF_INET6;
-            reinterpret_cast<struct sockaddr_in6*>(&addr)->sin6_port = htons(getResolverPort());
-        } else {
-            addr.ss_family = AF_INET;
-            reinterpret_cast<struct sockaddr_in*>(&addr)->sin_port = htons(getResolverPort());
+    if (1 != inet_pton(AF_INET, server_name_c, &(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr))) {
+        if (1 != inet_pton(AF_INET6, server_name_c, &(reinterpret_cast<sockaddr_in6*>(&addr)->sin6_addr))) {
+            syslog(LOG_INFO, "Address cannot be used as an IPv4/IPv6 address: %s", server_name_c);
+            return;
         }
 
-        syslog(LOG_DEBUG, "Parsing config: Added resolver %s", resolver.c_str());
+        addr.ss_family = AF_INET6;
+        reinterpret_cast<struct sockaddr_in6*>(&addr)->sin6_port = htons(getResolverPort());
+    } else {
+        addr.ss_family = AF_INET;
+        reinterpret_cast<struct sockaddr_in*>(&addr)->sin_port = htons(getResolverPort());
+    }
 
-        externalResolvers.emplace_back(addr);
+    syslog(LOG_DEBUG, "Parsing config: Added resolver %s", resolver.c_str());
+
+    externalResolvers.emplace_back(addr);
 }
 
 auto Configuration::parseLine(const std::string_view &haystack, const std::string_view &needle,  bool *isFound, bool hasColon) -> std::string {
-        std::string result;
+    std::string result;
 
-        std::size_t needle_position = haystack.find(needle);
+    std::size_t needle_position = haystack.find(needle);
 
-        /* Needle not in line */
-        if (std::string::npos == needle_position) {
+    /* Needle not in line */
+    if (std::string::npos == needle_position) {
+        if (nullptr != isFound) {
+            *isFound = false;
+        }
+
+        return result;
+    }
+
+    if (hasColon) {
+        /* Colon not located after needle */
+        if (haystack[needle_position + needle.size()] != ':') {
             if (nullptr != isFound) {
                 *isFound = false;
             }
@@ -47,47 +69,38 @@ auto Configuration::parseLine(const std::string_view &haystack, const std::strin
             return result;
         }
 
-        if (hasColon) {
-            /* Colon not located after needle */
-            if (haystack[needle_position + needle.size()] != ':') {
-                if (nullptr != isFound) {
-                   *isFound = false;
-                }
+        needle_position++;
+    }
 
-                return result;
-            }
+    std::size_t comment_position = haystack.find('#');
 
-            needle_position++;
-        }
-
-        std::size_t comment_position = haystack.find('#');
-
-        /* Needle commented out */
-        if (comment_position != std::string::npos && comment_position < needle_position) {
-            if (nullptr != isFound) {
-               *isFound = false;
-            }
-
-            return result;
-        }
-
+    /* Needle commented out */
+    if (comment_position != std::string::npos && comment_position < needle_position) {
         if (nullptr != isFound) {
-            *isFound = true;
-        }
-
-        for (std::size_t i = needle_position + needle.size(); i < haystack.length(); ++i) {
-            if (std::isspace(haystack[i]) != 0) {
-                /* Trailing space, as we already have the result */
-                if (!result.empty()) {
-                    break;
-                }
-                continue;
-            }
-
-            result.push_back(haystack[i]);
+            *isFound = false;
         }
 
         return result;
+    }
+
+    if (nullptr != isFound) {
+        *isFound = true;
+    }
+
+    for (std::size_t i = needle_position + needle.size(); i < haystack.length(); ++i) {
+        if (std::isspace(haystack[i]) != 0) {
+            /* Trailing space, as we already have the result */
+            if (!result.empty()) {
+                break;
+            }
+
+            continue;
+        }
+
+        result.push_back(haystack[i]);
+    }
+
+    return result;
 }
 
 void Configuration::parseResolverLine(std::vector<std::string> &resolverStrings, const std::string_view &line) {
@@ -116,6 +129,7 @@ void Configuration::parseResolverLine(std::vector<std::string> &resolverStrings,
                 result = "";
                 continue;
             }
+
             continue;
         }
 
@@ -127,7 +141,7 @@ void Configuration::parseResolverLine(std::vector<std::string> &resolverStrings,
     }
 }
 
-bool Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const std::string_view &line, const std::string &needle) {
+auto Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const std::string_view &line, const std::string &needle) -> bool {
     std::size_t needle_position = line.find(needle);
 
     /* Needle not in line */
@@ -150,8 +164,8 @@ bool Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
     }
 
     std::string result;
-    uint16_t previousValue = static_cast<uint16_t>(UINT16_MAX);
-    uint16_t currentValue = static_cast<uint16_t>(UINT16_MAX);
+    auto previousValue = static_cast<uint16_t>(UINT16_MAX);
+    auto currentValue = static_cast<uint16_t>(UINT16_MAX);
     bool isInterval = false;
 
     uint32_t processor_count = std::thread::hardware_concurrency();
@@ -163,7 +177,8 @@ bool Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
             }
 
             if (!result.empty()) {
-                int result_int = std::strtol(result.c_str(), nullptr, 10);
+                long result_int = std::strtol(result.c_str(), nullptr, ARG_INT_BASE);
+
                 if (result_int <= static_cast<uint16_t>(UINT16_MAX) && result_int >= 0) {
                     currentValue = static_cast<uint16_t>(result_int);
 
@@ -171,6 +186,7 @@ bool Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
                         return false;
                     }
                 }
+
                 result = "";
 
                 if (i < line.length() && line[i] == '-') {
@@ -190,11 +206,13 @@ bool Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
                             specifiers.push_back(i);
                         }
                     }
+
                     isInterval = false;
                     previousValue = static_cast<uint16_t>(UINT16_MAX);
                 } else {
                     specifiers.push_back(currentValue);
                 }
+
                 currentValue = static_cast<uint16_t>(UINT16_MAX);
             }
 
@@ -206,7 +224,9 @@ bool Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
         }
     }
 
-    /* TODO: Only if debug is active */
+    if (LogLevel::DEBUG != logLevel) {
+        return true;
+    }
 
     std::stringstream stream;
 
@@ -244,7 +264,7 @@ auto Configuration::loadResolversFromFile(std::vector<std::string> &resolverStri
 }
 
 auto Configuration::validateBoolean(const std::string_view &haystack, const std::string &optionName, bool &resultValue, bool *isFound) -> bool {
-    const std::string_view result = parseLine(haystack, optionName, isFound);
+    const std::string result = parseLine(haystack, optionName, isFound);
 
     if (result.empty()) {
         return true;
@@ -255,7 +275,7 @@ auto Configuration::validateBoolean(const std::string_view &haystack, const std:
         syslog(LOG_DEBUG, "Parsing config: %s has value true", optionName.c_str());
         return true;
     }
-    
+
     if (result == "false") {
         resultValue = false;
         syslog(LOG_DEBUG, "Parsing config: %s has value false", optionName.c_str());
@@ -268,14 +288,14 @@ auto Configuration::validateBoolean(const std::string_view &haystack, const std:
 }
 
 template<class T>
-auto Configuration::validateInteger(const std::string_view &haystack, const std::string &optionName, T &resultValue, uint32_t low, uint32_t high) -> bool {
-    std::string result = parseLine(haystack, optionName);
+auto Configuration::validateInteger(const std::string_view &haystack, const std::string &optionName, T &resultValue, uint32_t low, uint32_t high, bool *isFound) -> bool {
+    std::string result = parseLine(haystack, optionName, isFound);
 
     if (result.empty()) {
         return true;
     }
 
-    long result_int = std::strtol(result.c_str(), nullptr, 10);
+    long result_int = std::strtol(result.c_str(), nullptr, ARG_INT_BASE);
 
     if (result_int < low || result_int > high) {
         syslog(LOG_ERR, "Couldn't parse option %s, as its out of range (%u-%u inclusive)", optionName.c_str(), low, high);
@@ -332,7 +352,22 @@ auto Configuration::loadConfigurationFromFile(std::ifstream &fileStream, std::ve
             return false;
         }
 
-        if (!validateInteger(line, "attempts", attempts, 1, 10)) {
+        isIgnoreFound = false;
+
+        if (!validateBoolean(line, "use_diag_timer", useDiagTimer, &isIgnoreFound)) {
+            return false;
+        }
+
+        /* Avoid a name match */
+        if (isIgnoreFound) {
+            continue;
+        }
+
+        if (!validateInteger(line, "diag_timer_interval", diagTimerInterval, 1, 60)) {
+            return false;
+        }
+
+        if (!validateInteger(line, "attempts", attempts, ARG_MIN_ATTEMPTS, ARG_MAX_ATTEMPTS)) {
             return false;
         }
 
@@ -344,11 +379,18 @@ auto Configuration::loadConfigurationFromFile(std::ifstream &fileStream, std::ve
             return false;
         }
 
-        if (!validateInteger(line, "timeout", timeout, 1000, 60000)) {
+        uint16_t timeoutTemp{};
+        bool isTimeoutFound = false;
+
+        if (!validateInteger(line, "timeout", timeoutTemp, ARG_MIN_TIMEOUT, ARG_MAX_TIMEOUT, &isTimeoutFound)) {
             return false;
         }
 
-        if (!validateInteger(line, "udp_payload_size", udpPayloadSize, 512)) {
+        if (isTimeoutFound) {
+            timeout = std::chrono::milliseconds(timeoutTemp);
+        }
+
+        if (!validateInteger(line, "udp_payload_size", udpPayloadSize, MAX_NON_EDNS_PACKET)) {
             return false;
         }
 
@@ -356,6 +398,7 @@ auto Configuration::loadConfigurationFromFile(std::ifstream &fileStream, std::ve
             syslog(LOG_ERR, "Receiver identifiers given need to be less than processor count (%u)", std::thread::hardware_concurrency());
             return false;
         }
+
         if (!parseSpecifierLine(workers, line, "workers")) {
             syslog(LOG_ERR, "Worker identifiers given need to be less than processor count (%u)", std::thread::hardware_concurrency());
             return false;
@@ -373,12 +416,16 @@ auto Configuration::loadConfigurationFromFile(std::ifstream &fileStream, std::ve
 
         if (!result.empty()) {
             if (result == "debug") {
+                logLevel = LogLevel::DEBUG;
                 setlogmask (LOG_UPTO (LOG_DEBUG));
             } else if (result == "info") {
+                logLevel = LogLevel::INFO;
                 setlogmask (LOG_UPTO (LOG_INFO));
             } else if (result == "warn") {
+                logLevel = LogLevel::WARN;
                 setlogmask (LOG_UPTO (LOG_WARNING));
             } else if (result == "err") {
+                logLevel = LogLevel::ERR; /* Needs to be set explicitly just in case a reload changes it */
                 setlogmask (LOG_UPTO (LOG_ERR));
             } else {
                 syslog(LOG_ERR, "Invalid logging level, possible: debug, info, warn, err");
@@ -413,7 +460,7 @@ auto Configuration::loadConfiguration() -> bool {
         syslog(LOG_INFO, "Couldn't add external resolvers from resolver file");
 
         /* Avoid double error message */
-        if (externalResolvers.empty()) {
+        if (resolverStrings.empty()) {
             return false;
         }
     }
@@ -440,7 +487,7 @@ auto Configuration::loadConfiguration() -> bool {
 
     std::getline(iss, buffer, '/');
 
-    int pre = std::strtol(buffer.c_str(), nullptr, 10);
+    long pre = std::strtol(buffer.c_str(), nullptr, ARG_INT_BASE);
 
     if (pre != 96 && pre != 32 && pre != 40 && pre != 48 && pre != 56 && pre != 64) {
         syslog(LOG_ERR, "Invalid prefix length, usable: 32, 40, 48, 56, 64, 96");
@@ -451,8 +498,8 @@ auto Configuration::loadConfiguration() -> bool {
 
     syslog(LOG_DEBUG, "Parsing config: prefix has value %s", prefixString.c_str());
 
-    if (96 == prefixLength) {
-        struct in6_addr wellKnown{};
+    if (ARG_DEFAULT_PREFIX_LEN == prefixLength) {
+        struct in6_addr wellKnown {};
 
         std::istringstream iss(wellKnownPrefixString);
 
@@ -470,4 +517,10 @@ auto Configuration::loadConfiguration() -> bool {
     }
 
     return true;
+}
+
+void Configuration::resetConfiguration() {
+    std::string currentConfigFile(configFile);
+    *this = {};
+    setConfigFile(currentConfigFile);
 }
