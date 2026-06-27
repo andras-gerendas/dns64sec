@@ -74,7 +74,7 @@ class Task {
          * @brief Convenience variable converting between seconds and milliseconds
          *
          */
-        static inline constexpr uint16_t SEC_MSEC = 1000U;
+        static constexpr uint16_t SEC_MSEC = 1000U;
 
     public:
         using timer_guard = std::shared_ptr<Task*>;
@@ -84,9 +84,9 @@ class Task {
          *
          */
         struct greaterComparator {
-            auto operator() (const timer_guard &p1, const timer_guard &p2) -> bool {
-                Task *first = *p1;
-                Task *second = *p2;
+            auto operator() (const timer_guard &timer1, const timer_guard &timer2) -> bool {
+                Task *first = *timer1;
+                Task *second = *timer2;
 
                 if (nullptr == first) {
                     return false;
@@ -372,12 +372,12 @@ class Task {
 
             auto resultTime = start_time + std::chrono::milliseconds(configuration.getTimeout());
             auto secs = std::chrono::time_point_cast<std::chrono::seconds>(resultTime);
-            auto ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(resultTime) - std::chrono::time_point_cast<std::chrono::nanoseconds>(secs);
+            auto nanosecs = std::chrono::time_point_cast<std::chrono::nanoseconds>(resultTime) - std::chrono::time_point_cast<std::chrono::nanoseconds>(secs);
 
             struct itimerspec new_value {};
 
             new_value.it_value.tv_sec = secs.time_since_epoch().count();
-            new_value.it_value.tv_nsec = ns.count();
+            new_value.it_value.tv_nsec = nanosecs.count();
 
             if (-1 == timerfd_settime(central_socket_fd, TFD_TIMER_ABSTIME, &new_value, nullptr)) {
                 syslog(LOG_DEBUG, "Could not reset timer: %s", strerror(errno));

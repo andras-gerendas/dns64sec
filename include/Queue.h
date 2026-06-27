@@ -30,49 +30,49 @@ class Queue {
          * @brief The amount of cycles to wait before tasks are taken from receiver threads by workers
          *
          */
-        static inline constexpr uint16_t BURST_LIMIT = 5U;
+        static constexpr uint16_t BURST_LIMIT = 5U;
 
         /**
          * @brief The amount of events to wait before iterating through them (or timeout)
          *
          */
-        static inline constexpr uint16_t EPOLL_MAX_EVENTS = 1000U;
+        static constexpr uint16_t EPOLL_MAX_EVENTS = 1000U;
 
         /**
          * @brief The amount of time to wait before iterating through the events (or max_events)
          *
          */
-        static inline constexpr uint16_t EPOLL_TIMEOUT = 10U;
+        static constexpr uint16_t EPOLL_TIMEOUT = 10U;
 
         /**
          * @brief Time to wait for, before tasks are moved to the queue by the receiver (or added_at_once)
          *
          */
-        static inline constexpr uint16_t TASKS_RECEIVE_TIMEOUT = 100U;
+        static constexpr uint16_t TASKS_RECEIVE_TIMEOUT = 100U;
 
         /**
          * @brief Tasks to wait for, before they are moved to the queue by the receiver (or timeout)
          *
          */
-        static inline constexpr uint16_t TASKS_ADDED_AT_ONCE = 100U;
+        static constexpr uint16_t TASKS_ADDED_AT_ONCE = 100U;
 
         /**
          * @brief Tasks removed at once by workers from receivers
          *
          */
-        static inline constexpr uint16_t TASKS_REMOVED_AT_ONCE = 10U;
+        static constexpr uint16_t TASKS_REMOVED_AT_ONCE = 10U;
 
         /**
          * @brief File descriptor buffer to avoid allocating beyond all available file descriptors
          *
          */
-        static inline constexpr uint16_t WORKER_LIMIT_BUFFER = 10U;
+        static constexpr uint16_t WORKER_LIMIT_BUFFER = 10U;
 
         /**
          * @brief The capacity to reserve for the vector behind the timer queue at startup (to avoid a burst because of slow initialization)
          *
          */
-        static inline constexpr uint32_t TIMER_QUEUE_INITIAL_CAPACITY = 10000U;
+        static constexpr uint32_t TIMER_QUEUE_INITIAL_CAPACITY = 10000U;
 
         /**
          * @brief The current configuration instance
@@ -211,7 +211,7 @@ class Queue {
          * @param processor The processor where the thread is running
          * @param id The identifier of the thread (used for thread-unique variables)
          */
-        void receiver_executor(uint16_t processor, uint16_t id);
+        void receiver_executor(uint16_t processor, uint16_t thread_id);
 
         /**
          * @brief The thread function of a worker thread

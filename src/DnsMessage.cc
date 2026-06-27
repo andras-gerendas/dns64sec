@@ -38,7 +38,7 @@ constexpr uint32_t nonGlobalRanges[15][2] = {
 };
 
 auto DnsMessage::isNonGlobalAddress(uint32_t addr) -> bool {
-    uint32_t address = htonl(addr);
+    const uint32_t address = htonl(addr);
 
     for (const auto &range : nonGlobalRanges) {
         if ((range[1] & address) == range[0]) {
@@ -52,7 +52,7 @@ auto DnsMessage::isNonGlobalAddress(uint32_t addr) -> bool {
 
 auto DnsMessage::generateSynthetisedMessage(const Configuration &configuration, DnsMessage *message) const -> bool {
     auto *forged_buffer = message->getBuffer();
-    uint16_t buffer_size = message->getSize();
+    const uint16_t buffer_size = message->getSize();
 
     uint16_t newPosition = DNS_HEADER_LENGTH;
 
@@ -64,13 +64,13 @@ auto DnsMessage::generateSynthetisedMessage(const Configuration &configuration, 
     memcpy(forged_buffer, buffer, newPosition);
 
     for (uint16_t i = 0; i < getQueryCount(); i++) {
-        uint16_t position = getNamePosition(newPosition);
+        const uint16_t position = getNamePosition(newPosition);
 
         if (position == 0) {
             return false;
         }
 
-        uint16_t offset = position + 4;
+        const uint16_t offset = position + 4;
 
         if (getSize() < offset) {
             return false;
@@ -88,13 +88,13 @@ auto DnsMessage::generateSynthetisedMessage(const Configuration &configuration, 
     uint16_t oldPosition = newPosition;
 
     for (uint16_t i = 0; i < getAnswerCount(); i++) {
-        uint16_t position = getNamePosition(oldPosition);
+        const uint16_t position = getNamePosition(oldPosition);
 
         if (position == 0) {
             return false;
         }
 
-        uint16_t offset = position + LEN_RR_FIXED;
+        const uint16_t offset = position + LEN_RR_FIXED;
 
         if (getSize() < offset) {
             return false;
@@ -103,7 +103,7 @@ auto DnsMessage::generateSynthetisedMessage(const Configuration &configuration, 
         /* Copying in the beginning of the answer (except the address) */
         memcpy(forged_buffer + newPosition, buffer + oldPosition, offset - oldPosition);
 
-        uint16_t difference = newPosition - oldPosition;
+        const uint16_t difference = newPosition - oldPosition;
 
         newPosition = offset + difference;
         oldPosition = offset;
@@ -117,7 +117,7 @@ auto DnsMessage::generateSynthetisedMessage(const Configuration &configuration, 
 
             /* Adding the IPv4 address with the DNS64 prefix */
 
-            uint8_t prefixLength = configuration.getPrefixLength();
+            const uint8_t prefixLength = configuration.getPrefixLength();
 
             uint8_t *dest = forged_buffer + newPosition;
             uint8_t *src = buffer + oldPosition;

@@ -16,6 +16,8 @@
 #include <cstring>
 #include <netinet/in.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/param_build.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <sys/ioctl.h>
@@ -155,13 +157,13 @@ auto Task::handleState() -> bool {
                 return true;
             }
 
-            struct timeval tv {};
+            struct timeval timeout {};
 
-            tv.tv_sec = configuration.getTimeout().count() / SEC_MSEC;
+            timeout.tv_sec = configuration.getTimeout().count() / SEC_MSEC;
 
-            tv.tv_usec = (configuration.getTimeout().count() % SEC_MSEC) * SEC_MSEC;
+            timeout.tv_usec = (configuration.getTimeout().count() % SEC_MSEC) * SEC_MSEC;
 
-            if (setsockopt(query_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+            if (setsockopt(query_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
                 if (query_socket > -1) {
                     close(query_socket);
                     query_socket = -1;
@@ -171,7 +173,7 @@ auto Task::handleState() -> bool {
                 return true;
             }
 
-            if (setsockopt(query_socket, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) < 0) {
+            if (setsockopt(query_socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0) {
                 if (query_socket > -1) {
                     close(query_socket);
                     query_socket = -1;
@@ -262,7 +264,7 @@ auto Task::handleState() -> bool {
 
             auto [aaaaStart, aaaaAfterName] = aaaa_request.getRecordTypePosition(DnsMessage::SectionType::QUESTION, DnsMessage::RecordType::AAAA);
 
-            bool hasAaaaIn = aaaaStart > 0 && aaaa_request.getClassType(aaaaAfterName + 2) == DnsMessage::ClassType::IN;
+            const bool hasAaaaIn = aaaaStart > 0 && aaaa_request.getClassType(aaaaAfterName + 2) == DnsMessage::ClassType::IN;
 
             if (!aaaa_answer.validateQuestionSection(aaaa_request)) {
                 syslog(LOG_DEBUG, "Query question section does not match answer question section");
@@ -338,7 +340,7 @@ auto Task::handleState() -> bool {
 
                 DnsMessage forgedMessage(forged_buffer.get(), udpPayloadSize);
 
-                bool isSynthesized = a_answer.generateSynthetisedMessage(configuration, &forgedMessage);
+                const bool isSynthesized = a_answer.generateSynthetisedMessage(configuration, &forgedMessage);
 
                 sender_length = sizeof(sockaddr_in6);
 
@@ -479,7 +481,7 @@ auto Task::handleState() -> bool {
         }
 
         case DnssecState::DNSKEY_RESPONSE: {
-            DnsMessage dnskey_request(req_buffer.get(), receive_length);
+            const DnsMessage dnskey_request(req_buffer.get(), receive_length);
 
             DnsMessage aaaa_answer(ans_buffer.get(), answer_receive_length);
 
@@ -558,9 +560,9 @@ auto Task::handleState() -> bool {
 
                 size_t bufferPosition = 0;
 
-                uint16_t signerNameEnd = aaaa_answer.getNamePosition(rrsigAfterName + DnsMessage::LEN_RRSIG_FIXED);
+                const uint16_t signerNameEnd = aaaa_answer.getNamePosition(rrsigAfterName + DnsMessage::LEN_RRSIG_FIXED);
 
-                uint16_t signerNameLength = signerNameEnd - rrsigAfterName - DnsMessage::LEN_RRSIG_FIXED;
+                const uint16_t signerNameLength = signerNameEnd - rrsigAfterName - DnsMessage::LEN_RRSIG_FIXED;
 
                 auto signatureBuffer = std::make_unique<uint8_t[]>(DnsMessage::MAX_LEN_SIG_BUFFER);
 
@@ -592,7 +594,7 @@ auto Task::handleState() -> bool {
 
                 bufferPosition += 4;
 
-                uint16_t rrHeaderLength = htons(rrHeader->rdlength);
+                const uint16_t rrHeaderLength = htons(rrHeader->rdlength);
 
                 /* RR RDLENGTH + RDATA */
                 memcpy(signatureBuffer.get() + bufferPosition, &rrHeader->rdlength, 2 + rrHeaderLength);
@@ -601,36 +603,77 @@ auto Task::handleState() -> bool {
 
                 const uint8_t* signatureStart = &dnsKeyHeader->algorithm + 1;
 
-                RSA *pubKey = RSA_new();
+                OSSL_PARAM_BLD *builder = OSSL_PARAM_BLD_new();
 
-                if (nullptr == pubKey) {
-                    syslog(LOG_DEBUG, "Could not allocate RSA key structure");
+                if (nullptr == builder) {
+                    syslog(LOG_DEBUG, "Could not allocate OSSL_PARAM structure");
                     continue;
                 }
 
-                size_t expLength = signatureStart[0];
+                const size_t expLength = signatureStart[0];
 
                 BIGNUM *e = BN_bin2bn(&signatureStart[1], expLength, nullptr);
 
                 BIGNUM *n = BN_bin2bn(&signatureStart[1 + expLength], htons(dnsKeyHeader->header.rdlength) - 4U - expLength - 1U, nullptr);
 
-                if (0 == RSA_set0_key(pubKey, n, e, nullptr)) {
-                    syslog(LOG_DEBUG, "Could not set RSA key values");
-                    RSA_free(pubKey);
+                int result = OSSL_PARAM_BLD_push_BN(builder, "n", n);
+
+                if (0 == result) {
+                    syslog(LOG_DEBUG, "Could not push n parameter");
+                    continue;
+                }
+                
+                result = OSSL_PARAM_BLD_push_BN(builder, "e", e);
+
+                if (0 == result) {
+                    syslog(LOG_DEBUG, "Could not push e parameter");
+                    continue;
+                }
+                
+                result = OSSL_PARAM_BLD_push_BN(builder, "d", nullptr);
+
+                if (0 == result) {
+                    syslog(LOG_DEBUG, "Could not push d parameter");
+                    continue;
+                }
+
+                OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(builder);
+
+                EVP_PKEY_CTX *context = EVP_PKEY_CTX_new_from_name(nullptr, "RSA", nullptr);
+
+                if (nullptr == context) {
+                    syslog(LOG_DEBUG, "Could not allocate EVP context");
+                    continue;
+                }
+
+                result = EVP_PKEY_verify_init_ex(context, params);
+
+                if (0 == result) {
+                    syslog(LOG_DEBUG, "Could not initialize EVP verify");
+                    continue;
+                }
+
+                result = EVP_PKEY_CTX_set_signature_md(context, EVP_sha256());
+
+                if (0 == result) {
+                    syslog(LOG_DEBUG, "Could not set EVP signature");
                     continue;
                 }
 
                 std::array<unsigned char, SHA256_DIGEST_LENGTH> hash{};
 
-                SHA256_CTX sha256;
-                SHA256_Init(&sha256);
-                SHA256_Update(&sha256, signatureBuffer.get(), bufferPosition);
-                SHA256_Final(hash.data(), &sha256);
+                EVP_MD_CTX *mdctx = EVP_MD_CTX_create();
 
-                if (1 == RSA_verify(NID_sha256, hash.data(), SHA256_DIGEST_LENGTH, &aaaa_answer.getBuffer()[signerNameEnd],
-                                    htons(rrsigHeader->header.rdlength) - signerNameLength - DnsMessage::LEN_RRSIG_RDATA_FIXED, pubKey)) {
+                EVP_DigestInit_ex(mdctx, EVP_sha256(), nullptr);
+                EVP_DigestUpdate(mdctx, signatureBuffer.get(), bufferPosition);
+                EVP_DigestFinal_ex(mdctx, hash.data(), nullptr);
+
+                EVP_MD_CTX_destroy(mdctx);
+
+                if (1 == EVP_PKEY_verify(context, hash.data(), SHA256_DIGEST_LENGTH, &aaaa_answer.getBuffer()[signerNameEnd],
+                                         htons(rrsigHeader->header.rdlength) - signerNameLength - DnsMessage::LEN_RRSIG_RDATA_FIXED)) {
                     syslog(LOG_DEBUG, "RSA validation successful");
-                    RSA_free(pubKey);
+                    EVP_PKEY_CTX_free(context);
 
                     if (!resetElapsedTime()) {
                         syslog(LOG_ERR, "Could not reset timer");
@@ -648,7 +691,7 @@ auto Task::handleState() -> bool {
                     syslog(LOG_DEBUG, "RSA validation has failed: %s", ERR_error_string(err, nullptr));
                 }
 
-                RSA_free(pubKey);
+                EVP_PKEY_CTX_free(context);
             }
         }
 
@@ -775,7 +818,7 @@ auto Task::receivePacket(BufferType type) -> bool {
         return false;
     }
 
-    ssize_t temp_receive_length = recv(query_socket, buffer, udpPayloadSize, 0);
+    const ssize_t temp_receive_length = recv(query_socket, buffer, udpPayloadSize, 0);
 
     if (DnsMessage::DNS_HEADER_LENGTH > temp_receive_length) {
         if (0 < temp_receive_length) {

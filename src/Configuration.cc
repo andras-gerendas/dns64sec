@@ -72,7 +72,7 @@ auto Configuration::parseLine(const std::string_view &haystack, const std::strin
         needle_position++;
     }
 
-    std::size_t comment_position = haystack.find('#');
+    const std::size_t comment_position = haystack.find('#');
 
     /* Needle commented out */
     if (comment_position != std::string::npos && comment_position < needle_position) {
@@ -106,14 +106,14 @@ auto Configuration::parseLine(const std::string_view &haystack, const std::strin
 void Configuration::parseResolverLine(std::vector<std::string> &resolverStrings, const std::string_view &line) {
     constexpr std::string_view needle = "resolvers:";
 
-    std::size_t needle_position = line.find(needle);
+    const std::size_t needle_position = line.find(needle);
 
     /* Needle not in line */
     if (std::string::npos == needle_position) {
         return;
     }
 
-    std::size_t comment_position = line.find('#');
+    const std::size_t comment_position = line.find('#');
 
     /* Needle commented out */
     if (comment_position != std::string::npos && comment_position < needle_position) {
@@ -156,7 +156,7 @@ auto Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
 
     needle_position++;
 
-    std::size_t comment_position = line.find('#');
+    const std::size_t comment_position = line.find('#');
 
     /* Needle commented out */
     if (comment_position != std::string::npos && comment_position < needle_position) {
@@ -168,7 +168,7 @@ auto Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
     auto currentValue = static_cast<uint16_t>(UINT16_MAX);
     bool isInterval = false;
 
-    uint32_t processor_count = std::thread::hardware_concurrency();
+    const uint32_t processor_count = std::thread::hardware_concurrency();
 
     for (std::size_t i = needle_position + needle.size(); i < line.length() + 1; ++i) {
         if (i == line.length() || std::isspace(line[i]) != 0 || line[i] == ',' || line[i] == '-') {
@@ -177,7 +177,7 @@ auto Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
             }
 
             if (!result.empty()) {
-                long result_int = std::strtol(result.c_str(), nullptr, ARG_INT_BASE);
+                const long result_int = std::strtol(result.c_str(), nullptr, ARG_INT_BASE);
 
                 if (result_int <= static_cast<uint16_t>(UINT16_MAX) && result_int >= 0) {
                     currentValue = static_cast<uint16_t>(result_int);
@@ -232,7 +232,7 @@ auto Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
 
     std::copy(specifiers.begin(), specifiers.end(), std::experimental::make_ostream_joiner(stream, ", "));
 
-    std::string out = stream.str();
+    const std::string out = stream.str();
 
     syslog(LOG_DEBUG, "Parsing config: %s has value(s) [%s]", needle.c_str(), out.c_str());
 
@@ -240,7 +240,7 @@ auto Configuration::parseSpecifierLine(std::vector<uint16_t> &specifiers, const 
 }
 
 auto Configuration::loadResolversFromFile(std::vector<std::string> &resolverStrings) -> bool {
-    std::size_t resolverCount = resolverStrings.size();
+    const std::size_t resolverCount = resolverStrings.size();
 
     std::ifstream dns_server_file(resolverConfig);
 
@@ -253,7 +253,7 @@ auto Configuration::loadResolversFromFile(std::vector<std::string> &resolverStri
 
     while (std::getline(dns_server_file, line)) {
         /* Constant checks: Line starts with comment, or cannot contain 'nameserver' */
-        if (line.length() == 0 || '#' == line[0] || line.length() < nameserver.length()) {
+        if (line.empty() || '#' == line[0] || line.length() < nameserver.length()) {
             continue;
         }
 
@@ -289,13 +289,13 @@ auto Configuration::validateBoolean(const std::string_view &haystack, const std:
 
 template<class T>
 auto Configuration::validateInteger(const std::string_view &haystack, const std::string &optionName, T &resultValue, uint32_t low, uint32_t high, bool *isFound) -> bool {
-    std::string result = parseLine(haystack, optionName, isFound);
+    const std::string result = parseLine(haystack, optionName, isFound);
 
     if (result.empty()) {
         return true;
     }
 
-    long result_int = std::strtol(result.c_str(), nullptr, ARG_INT_BASE);
+    const long result_int = std::strtol(result.c_str(), nullptr, ARG_INT_BASE);
 
     if (result_int < low || result_int > high) {
         syslog(LOG_ERR, "Couldn't parse option %s, as its out of range (%u-%u inclusive)", optionName.c_str(), low, high);
@@ -312,7 +312,7 @@ auto Configuration::loadConfigurationFromFile(std::ifstream &fileStream, std::ve
     std::string line;
 
     while (std::getline(fileStream, line)) {
-        if (line.length() == 0 || '#' == line[0]) {
+        if (line.empty() || '#' == line[0]) {
             continue;
         }
 
@@ -487,7 +487,7 @@ auto Configuration::loadConfiguration() -> bool {
 
     std::getline(iss, buffer, '/');
 
-    long pre = std::strtol(buffer.c_str(), nullptr, ARG_INT_BASE);
+    const long pre = std::strtol(buffer.c_str(), nullptr, ARG_INT_BASE);
 
     if (pre != 96 && pre != 32 && pre != 40 && pre != 48 && pre != 56 && pre != 64) {
         syslog(LOG_ERR, "Invalid prefix length, usable: 32, 40, 48, 56, 64, 96");
@@ -520,7 +520,7 @@ auto Configuration::loadConfiguration() -> bool {
 }
 
 void Configuration::resetConfiguration() {
-    std::string currentConfigFile(configFile);
+    const std::string currentConfigFile(configFile);
     *this = {};
     setConfigFile(currentConfigFile);
 }

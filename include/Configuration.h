@@ -35,73 +35,73 @@ class Configuration {
          * @brief The maximum size of non-EDNS packets
          *
          */
-        static inline constexpr uint16_t MAX_NON_EDNS_PACKET = 512U;
+        static constexpr uint16_t MAX_NON_EDNS_PACKET = 512U;
     private:
         /**
          * @brief The default file descriptor limit to be used as maximum file descriptor count
          *
          */
-        static inline constexpr uint16_t ARG_DEFAULT_FD_LIMIT = 1024U;
+        static constexpr uint16_t ARG_DEFAULT_FD_LIMIT = 1024U;
 
         /**
          * @brief The length of the prefix used by default by the program
          *
          */
-        static inline constexpr uint8_t ARG_DEFAULT_PREFIX_LEN = 96U;
+        static constexpr uint8_t ARG_DEFAULT_PREFIX_LEN = 96U;
 
         /**
          * @brief The default DNS port used by the program
          *
          */
-        static inline constexpr uint16_t ARG_DEFAULT_DNS_PORT = 53U;
+        static constexpr uint16_t ARG_DEFAULT_DNS_PORT = 53U;
 
         /**
          * @brief The well-known DNS64 prefix represented in string form
          *
          */
-        static inline constexpr const char * wellKnownPrefixString = "64:ff9b::/96";
+        static constexpr const char * wellKnownPrefixString = "64:ff9b::/96";
 
         /**
          * @brief The minimum timeout waiting for resolvers to answer
          *
          */
-        static inline constexpr uint16_t ARG_MIN_TIMEOUT = 1000U;
+        static constexpr uint16_t ARG_MIN_TIMEOUT = 1000U;
 
         /**
          * @brief The default timeout waiting for resolvers to answer
          *
          */
-        static inline constexpr uint16_t ARG_DEFAULT_TIMEOUT = 5000U;
+        static constexpr uint16_t ARG_DEFAULT_TIMEOUT = 5000U;
 
         /**
          * @brief The maximum timeout waiting for resolvers to answer
          *
          */
-        static inline constexpr uint16_t ARG_MAX_TIMEOUT = 60000U;
+        static constexpr uint16_t ARG_MAX_TIMEOUT = 60000U;
 
         /**
          * @brief The minimum number of attempts a resolver is attempted
          *
          */
-        static inline constexpr uint16_t ARG_MIN_ATTEMPTS = 1U;
+        static constexpr uint16_t ARG_MIN_ATTEMPTS = 1U;
 
         /**
          * @brief The default number of attempts a resolver is attempted
          *
          */
-        static inline constexpr uint16_t ARG_DEFAULT_ATTEMPTS = 3U;
+        static constexpr uint16_t ARG_DEFAULT_ATTEMPTS = 3U;
 
         /**
          * @brief The maximum number of attempts a resolver is attempted
          *
          */
-        static inline constexpr uint16_t ARG_MAX_ATTEMPTS = 10U;
+        static constexpr uint16_t ARG_MAX_ATTEMPTS = 10U;
 
         /**
          * @brief Base 10 of integers used during parsing (stored as convenience)
          *
          */
-        static inline constexpr uint16_t ARG_INT_BASE = 10U;
+        static constexpr uint16_t ARG_INT_BASE = 10U;
 
         /**
          * @brief The number of attempts a resolver is tried before trying the next one

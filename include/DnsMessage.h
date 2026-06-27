@@ -76,61 +76,61 @@ class DnsMessage {
          * @brief The mask for separating the lower 8-bits of a 16-bit integer
          *
          */
-        static inline constexpr uint16_t BYTE_MASK = 0xFFU;
+        static constexpr uint16_t BYTE_MASK = 0xFFU;
 
         /**
          * @brief Mask for separating the first bit of a 16-bit integer
          *
          */
-        static inline constexpr uint16_t MASK_FIRST_UINT16_BIT = 0x8000U;
+        static constexpr uint16_t MASK_FIRST_UINT16_BIT = 0x8000U;
 
         /**
          * @brief The shift value to bit shift a byte
          *
          */
-        static inline constexpr uint8_t BYTE_SHIFT = 0x8U;
+        static constexpr uint8_t BYTE_SHIFT = 0x8U;
 
         /**
          * @brief The length of the fixed-length DNS header
          *
          */
-        static inline constexpr uint16_t DNS_HEADER_LENGTH = 12U;
+        static constexpr uint16_t DNS_HEADER_LENGTH = 12U;
 
         /**
          * @brief The maximum size of the RRSIG signature buffer
          *
          */
-        static inline constexpr uint16_t MAX_LEN_SIG_BUFFER = 8192U;
+        static constexpr uint16_t MAX_LEN_SIG_BUFFER = 8192U;
 
         /**
          * @brief The length of the fixed portion of an RR
          *
          */
-        static inline constexpr uint16_t LEN_RR_FIXED = 10U;
+        static constexpr uint16_t LEN_RR_FIXED = 10U;
 
         /**
          * @brief The length of the fixed portion of an RRSIG RDATA
          *
          */
-        static inline constexpr uint16_t LEN_RRSIG_RDATA_FIXED = 18U;
+        static constexpr uint16_t LEN_RRSIG_RDATA_FIXED = 18U;
 
         /**
          * @brief The length of the fixed portion of an RRSIG RR
          *
          */
-        static inline constexpr uint16_t LEN_RRSIG_FIXED = LEN_RR_FIXED + LEN_RRSIG_RDATA_FIXED;
+        static constexpr uint16_t LEN_RRSIG_FIXED = LEN_RR_FIXED + LEN_RRSIG_RDATA_FIXED;
 
         /**
          * @brief The bitmask for identifying a pointer
          *
          */
-        static inline constexpr uint8_t MASK_POINTER = 0xC0U;
+        static constexpr uint8_t MASK_POINTER = 0xC0U;
 
         /**
          * @brief The first extended RCODE
          *
          */
-        static inline constexpr uint8_t FIRST_EXTENDED_RCODE = 16U;
+        static constexpr uint8_t FIRST_EXTENDED_RCODE = 16U;
 
         /**
          * @brief Helper structure for the binary representation of the fixed-portion of an RR
@@ -295,7 +295,7 @@ class DnsMessage {
          * @param value The value in host order
          */
         void setShortAt(uint16_t position, uint16_t value) {
-            uint16_t inNetworkOrder = htons(value);
+            const uint16_t inNetworkOrder = htons(value);
             buffer[position] = inNetworkOrder & BYTE_MASK;
             buffer[position + 1] = (inNetworkOrder >> BYTE_SHIFT);
         }
@@ -334,7 +334,7 @@ class DnsMessage {
                 return false;
             }
 
-            uint16_t questionSize = nameEnd - DNS_HEADER_LENGTH + 4U;
+            const uint16_t questionSize = nameEnd - DNS_HEADER_LENGTH + 4U;
 
             return 0 == memcmp(&buffer[DNS_HEADER_LENGTH], &other.buffer[DNS_HEADER_LENGTH], questionSize);
         }
@@ -446,8 +446,8 @@ class DnsMessage {
             }
 
             for (uint16_t i = 0; i < getQueryCount(); i++) {
-                uint16_t startPosition = newPosition;
-                uint16_t position = getNamePosition(newPosition);
+                const uint16_t startPosition = newPosition;
+                const uint16_t position = getNamePosition(newPosition);
 
                 if (position == 0) {
                     return std::make_pair(0, 0);
@@ -469,8 +469,8 @@ class DnsMessage {
             }
 
             for (uint16_t i = 0; i < getAnswerCount(); i++) {
-                uint16_t startPosition = newPosition;
-                uint16_t position = getNamePosition(newPosition);
+                const uint16_t startPosition = newPosition;
+                const uint16_t position = getNamePosition(newPosition);
 
                 if (position == 0) {
                     return std::make_pair(0, 0);
@@ -498,8 +498,8 @@ class DnsMessage {
             }
 
             for (uint16_t i = 0; i < getAuthorityCount(); i++) {
-                uint16_t startPosition = newPosition;
-                uint16_t position = getNamePosition(newPosition);
+                const uint16_t startPosition = newPosition;
+                const uint16_t position = getNamePosition(newPosition);
 
                 if (position == 0) {
                     return std::make_pair(0, 0);
@@ -527,8 +527,8 @@ class DnsMessage {
             }
 
             for (uint16_t i = 0; i < getAdditionalCount(); i++) {
-                uint16_t startPosition = newPosition;
-                uint16_t position = getNamePosition(newPosition);
+                const uint16_t startPosition = newPosition;
+                const uint16_t position = getNamePosition(newPosition);
 
                 if (position == 0) {
                     return std::make_pair(0, 0);
@@ -563,7 +563,7 @@ class DnsMessage {
         }
 
         void setRecordType(uint16_t position, RecordType type) {
-            uint16_t type_uint = htons(static_cast<uint16_t>(type));
+            const uint16_t type_uint = htons(static_cast<uint16_t>(type));
 
             buffer[position] = type_uint & BYTE_MASK;
             buffer[position + 1] = (type_uint >> BYTE_SHIFT);
@@ -576,7 +576,7 @@ class DnsMessage {
                 return false;
             }
 
-            uint16_t position = getNamePosition(newPosition);
+            const uint16_t position = getNamePosition(newPosition);
 
             if (position == 0) {
                 return false;
@@ -601,7 +601,7 @@ class DnsMessage {
             }
 
             for (uint16_t i = 0; i < getQueryCount(); i++) {
-                uint16_t position = getNamePosition(newPosition);
+                const uint16_t position = getNamePosition(newPosition);
 
                 if (position == 0) {
                     return false;
@@ -721,15 +721,16 @@ class DnsMessage {
         auto validateRrSigTimestamp(uint16_t position) -> bool {
             auto *header = getRrsigHeader(position);
 
-            time_t timestamp = time(nullptr);
+            /** TODO: What happens after 2038? */
+            const time_t timestamp = time(nullptr);
 
-            int result = (int32_t) ((uint32_t)htonl(header->rdata.signatureInception) - (uint32_t)timestamp);
+            int result = static_cast<int32_t>(htonl(header->rdata.signatureInception) - static_cast<uint32_t>(timestamp));
 
             if (result > 0) {
                 return false;
             }
 
-            result = (int32_t) ((uint32_t)timestamp - (uint32_t)htonl(header->rdata.signatureExpiration));
+            result = static_cast<int32_t>(static_cast<uint32_t>(timestamp) - htonl(header->rdata.signatureExpiration));
 
             return result < 0;
         }
@@ -771,17 +772,15 @@ class DnsMessage {
 
             /* Taken from RFC 4034 */
 
-            unsigned long ac;
-            int i;
-
+            unsigned long accumulator = 0;
             auto length = getShortAt(position + 8);
 
-            for (ac = 0, i = 0; i < length; ++i) {
-                ac += (i & 1) ? start[i + 10U] : start[i + 10U] << 8;
+            for (int i = 0; i < length; ++i) {
+                accumulator += (i & 1) ? start[i + 10U] : start[i + 10U] << 8;
             }
 
-            ac += (ac >> 16) & 0xFFFF;
+            accumulator += (accumulator >> 16) & 0xFFFF;
 
-            return ac & 0xFFFF;
+            return accumulator & 0xFFFF;
         }
 };

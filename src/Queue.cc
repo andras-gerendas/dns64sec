@@ -102,12 +102,12 @@ void Queue::init() {
 
     for (uint32_t i = 0; i < receiver_count; i++) {
         task_counters.push_back(0);
-        std::array<int, 2> arr = {0, 0};
+        const std::array<int, 2> arr = {0, 0};
         signalPipes.emplace_back(arr);
         queue_mutexes.push_back(std::move(std::make_unique<std::mutex>()));
     }
 
-    std::unique_lock<std::mutex> lock{queue_init_mutex};
+    const std::unique_lock<std::mutex> lock{queue_init_mutex};
     is_queue_init_complete = true;
     queue_init_condition.notify_all();
 }
@@ -117,7 +117,7 @@ void Queue::bind_to_processor(std::thread *thread, uint16_t processor) {
     CPU_ZERO(&cpuset);
     CPU_SET(processor, &cpuset);
 
-    int rc = pthread_setaffinity_np(thread->native_handle(), sizeof(cpu_set_t), &cpuset);
+    const int rc = pthread_setaffinity_np(thread->native_handle(), sizeof(cpu_set_t), &cpuset);
 
     if (rc != 0) {
         /* Non-fatal issue */
@@ -125,8 +125,8 @@ void Queue::bind_to_processor(std::thread *thread, uint16_t processor) {
     }
 }
 
-auto Queue::bind_to_socket(uint16_t port, uint16_t processor) -> int    {
-    int server_socket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+auto Queue::bind_to_socket(uint16_t port, uint16_t processor) -> int {
+    const int server_socket = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 
     if (-1 == server_socket) {
         syslog(LOG_ERR, "Couldn't create socket on processor %u", processor);
@@ -140,11 +140,11 @@ auto Queue::bind_to_socket(uint16_t port, uint16_t processor) -> int    {
         return -1;
     }
 
-    struct timeval tv {
+    struct timeval timeout {
         0, TASKS_RECEIVE_TIMEOUT
     };
 
-    if (setsockopt(server_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+    if (setsockopt(server_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         syslog(LOG_ERR, "Couldn't set socket option for timeout %s", strerror(errno));
         return -1;
     }
@@ -167,7 +167,7 @@ auto Queue::bind_to_socket(uint16_t port, uint16_t processor) -> int    {
     return server_socket;
 }
 
-void Queue::receiver_executor(uint16_t processor, uint16_t id) {
+void Queue::receiver_executor(uint16_t processor, uint16_t thread_id) {
     /* Once the syslog message is printed the signals are already blocked */
     sigset_t set;
     sigemptyset(&set);
@@ -187,13 +187,13 @@ void Queue::receiver_executor(uint16_t processor, uint16_t id) {
 
     syslog(LOG_INFO, "Receiver thread started on processor %u", processor);
 
-    if (-1 == pipe2(signalPipes[id].data(), O_CLOEXEC)) {
+    if (-1 == pipe2(signalPipes[thread_id].data(), O_CLOEXEC)) {
         syslog(LOG_ERR, "Could not create pipe: %s", strerror(errno));
         is_running = false;
         return;
     }
 
-    if (fcntl(signalPipes[id][1], F_SETFL, O_NONBLOCK) == -1) {
+    if (fcntl(signalPipes[thread_id][1], F_SETFL, O_NONBLOCK) == -1) {
         syslog(LOG_ERR, "Could not set pipe to be non-blocking");
         is_running = false;
         return;
@@ -208,7 +208,7 @@ void Queue::receiver_executor(uint16_t processor, uint16_t id) {
         availability_condition.notify_all();
     }
 
-    int socket = bind_to_socket(configuration.getPort(), processor);
+    const int socket = bind_to_socket(configuration.getPort(), processor);
 
     if (socket == -1) {
         is_running = false;
@@ -223,7 +223,7 @@ void Queue::receiver_executor(uint16_t processor, uint16_t id) {
 
     std::queue<std::unique_ptr<Task> > localQueue;
 
-    bool isDiagTimerUsed = configuration.isDiagTimerUsed();
+    const bool isDiagTimerUsed = configuration.isDiagTimerUsed();
 
     while (is_running) {
         while (is_running) {
@@ -259,15 +259,15 @@ void Queue::receiver_executor(uint16_t processor, uint16_t id) {
             }
         }
 
-        queue_mutexes[id]->lock();
+        queue_mutexes[thread_id]->lock();
 
-        int current_task_count = task_counters[id];
+        const int current_task_count = task_counters[thread_id];
 
         while (!localQueue.empty()) {
-            task_queues[id].emplace(std::move(localQueue.front()));
+            task_queues[thread_id].emplace(std::move(localQueue.front()));
             localQueue.pop();
 
-            ++task_counters[id];
+            ++task_counters[thread_id];
 
             if (isDiagTimerUsed) {
                 ++receive_count;
@@ -278,15 +278,15 @@ void Queue::receiver_executor(uint16_t processor, uint16_t id) {
         if (0 == current_task_count) {
             syslog(LOG_DEBUG, "Writing to pipe on processor %u", processor);
 
-            if (0 >= write(signalPipes[id][1], "a", 1)) {
+            if (0 >= write(signalPipes[thread_id][1], "a", 1)) {
                 syslog(LOG_ERR, "Could not write to signal pipe");
                 is_running = false;
-                queue_mutexes[id]->unlock();
+                queue_mutexes[thread_id]->unlock();
                 return;
             }
         }
 
-        queue_mutexes[id]->unlock();
+        queue_mutexes[thread_id]->unlock();
     }
 
     close(socket);
@@ -317,9 +317,9 @@ void Queue::worker_executor(uint16_t processor) {
     std::list<std::unique_ptr<Task> > initialTasks;
     std::map<int, std::unique_ptr<Task> > resolverTasks;
 
-    int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+    const int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
 
-    struct epoll_event ev {};
+    struct epoll_event event {};
     std::array<struct epoll_event, EPOLL_MAX_EVENTS> events{};
 
     if (epoll_fd == -1) {
@@ -358,17 +358,17 @@ void Queue::worker_executor(uint16_t processor) {
             syslog(LOG_DEBUG, "Could not reset timer: %s", strerror(errno));
         }
 
-        ev.events = EPOLLIN;
-        ev.data.fd = diag_timer_fd;
+        event.events = EPOLLIN;
+        event.data.fd = diag_timer_fd;
 
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, diag_timer_fd, &ev) == -1) {
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, diag_timer_fd, &event) == -1) {
             is_running = false;
             syslog(LOG_ERR, "Could not add diag timer to epoll_ctl: %s", strerror(errno));
             return;
         }
     }
 
-    int central_timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
+    const int central_timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
 
     if (-1 == central_timer_fd) {
         syslog(LOG_ERR, "Could not create central timer");
@@ -376,10 +376,10 @@ void Queue::worker_executor(uint16_t processor) {
         return;
     }
 
-    ev.events = EPOLLIN;
-    ev.data.fd = central_timer_fd;
+    event.events = EPOLLIN;
+    event.data.fd = central_timer_fd;
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, central_timer_fd, &ev) == -1) {
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, central_timer_fd, &event) == -1) {
         is_running = false;
         syslog(LOG_ERR, "Could not add central timer to epoll_ctl: %s", strerror(errno));
         return;
@@ -390,10 +390,10 @@ void Queue::worker_executor(uint16_t processor) {
     lock.unlock();
 
     for (uint32_t i = 0; i < receiver_count; i++) {
-        ev.events = EPOLLIN;
-        ev.data.fd = signalPipes[i][0];
+        event.events = EPOLLIN;
+        event.data.fd = signalPipes[i][0];
 
-        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, signalPipes[i][0], &ev) == -1) {
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, signalPipes[i][0], &event) == -1) {
             is_running = false;
             syslog(LOG_ERR, "Could not add pipe to epoll_ctl: %s", strerror(errno));
             return;
@@ -401,7 +401,7 @@ void Queue::worker_executor(uint16_t processor) {
     }
 
     /* Only accept new connections if the current ones (query + timer + WORKER_LIMIT_BUFFER for buffer) do not exceed the worker limit */
-    rlim_t workerLimit = configuration.getFdLimit() / 2 / worker_count - WORKER_LIMIT_BUFFER;
+    const rlim_t workerLimit = configuration.getFdLimit() / 2 / worker_count - WORKER_LIMIT_BUFFER;
 
     uint32_t processedCount = 0;
     uint32_t timeoutCount = 0;
@@ -425,11 +425,11 @@ void Queue::worker_executor(uint16_t processor) {
 
     bool isTimeoutOccuring = false;
     uint16_t burstLimiter = 0;
-    bool isDiagTimerUsed = configuration.isDiagTimerUsed();
+    const bool isDiagTimerUsed = configuration.isDiagTimerUsed();
     uint16_t currentReceiver = 0;
 
     while (is_running) {
-        int nfds = epoll_wait(epoll_fd, events.begin(), EPOLL_MAX_EVENTS, EPOLL_TIMEOUT);
+        const int nfds = epoll_wait(epoll_fd, events.begin(), EPOLL_MAX_EVENTS, EPOLL_TIMEOUT);
 
         if (nfds == -1) {
             is_running = false;
@@ -453,8 +453,8 @@ void Queue::worker_executor(uint16_t processor) {
 
         isTimeoutOccuring = false;
 
-        for (int n = 0; n < nfds; ++n) {
-            int eventfd = events[n].data.fd;
+        for (int current = 0; current < nfds; ++current) {
+            const int eventfd = events[current].data.fd;
 
             if (-1 == eventfd) {
                 continue;
@@ -470,7 +470,7 @@ void Queue::worker_executor(uint16_t processor) {
                         syslog(LOG_ERR, "Could not read from the diagnostic timer");
                     }
 
-                    std::lock_guard<std::mutex> lock{running_mutex};
+                    const std::lock_guard<std::mutex> lock{running_mutex};
 
                     if (maxNfds > 1) {
                         syslog(LOG_ERR, "Diag timer (%02u): maxnfds: %d, proc: %u, inittmo: %u, eventtmo: %u, tmo: %u, pend: %u, init: %lu, res: %lu, maxinit: %u, maxres: %u", processor, maxNfds, processedCount, initTimeoutCount, eventTimeoutCount, timeoutCount, receive_count - processedCount, initialTasks.size(), resolverTasks.size(), maxInitialTaskSize, maxResolverTaskSize);
@@ -525,10 +525,10 @@ void Queue::worker_executor(uint16_t processor) {
                 }
             } else {
                 setlogmask (LOG_UPTO (LOG_DEBUG));
-                syslog(LOG_ERR, "Stray socket (proc %u, no %d from %d): %d", processor, n + 1, nfds, eventfd);
+                syslog(LOG_ERR, "Stray socket (proc %u, no %d from %d): %d", processor, current + 1, nfds, eventfd);
 
-                for (int no = 0; no < nfds; ++no) {
-                    syslog(LOG_ERR, "events: %d", events[no].data.fd);
+                for (int sub_current = 0; sub_current < nfds; ++sub_current) {
+                    syslog(LOG_ERR, "events: %d", events[sub_current].data.fd);
                 }
 
                 is_running = false;
@@ -556,12 +556,12 @@ void Queue::worker_executor(uint16_t processor) {
             }
 
             if (avoidsBurst) {
-                rlim_t effectiveLimit = workerLimit - (initialTasks.size() + resolverTasks.size());
+                const rlim_t effectiveLimit = workerLimit - (initialTasks.size() + resolverTasks.size());
                 rlim_t removedTasks = TASKS_REMOVED_AT_ONCE;
 
-                std::lock_guard<std::mutex> lock{*queue_mutexes[currentReceiver]};
+                const std::lock_guard<std::mutex> lock{*queue_mutexes[currentReceiver]};
 
-                int current_task_count = task_counters[currentReceiver];
+                const int current_task_count = task_counters[currentReceiver];
 
                 if (removedTasks > effectiveLimit) {
                     removedTasks = effectiveLimit;
@@ -614,7 +614,7 @@ void Queue::worker_executor(uint16_t processor) {
                     continue;
                 }
 
-                int taskSocket = taskPointer->getSocket();
+                const int taskSocket = taskPointer->getSocket();
 
                 if (TaskState::FINISHED == taskPointer->getState()) {
                     if (0 == taskPointer->getRemainingTimeouts()) {
@@ -699,12 +699,12 @@ void Queue::worker_executor(uint16_t processor) {
 
                 auto resultTime = task->getStartTime() + std::chrono::milliseconds(configuration.getTimeout());
                 auto secs = std::chrono::time_point_cast<std::chrono::seconds>(resultTime);
-                auto ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(resultTime) - std::chrono::time_point_cast<std::chrono::nanoseconds>(secs);
+                auto nanosecs = std::chrono::time_point_cast<std::chrono::nanoseconds>(resultTime) - std::chrono::time_point_cast<std::chrono::nanoseconds>(secs);
 
                 struct itimerspec new_value {};
 
                 new_value.it_value.tv_sec = secs.time_since_epoch().count();
-                new_value.it_value.tv_nsec = ns.count();
+                new_value.it_value.tv_nsec = nanosecs.count();
 
                 if (-1 == timerfd_settime(central_timer_fd, TFD_TIMER_ABSTIME, &new_value, nullptr)) {
                     syslog(LOG_DEBUG, "Could not reset timer: %s", strerror(errno));
@@ -741,7 +741,7 @@ void Queue::worker_executor(uint16_t processor) {
             }
 
             if (-1 != task->getSocket()) {
-                struct epoll_event ev {};
+                struct epoll_event event {};
 
                 if (!task->getTimerArmState()) {
                     task->setTimerQueue(&timerQueue);
@@ -750,12 +750,12 @@ void Queue::worker_executor(uint16_t processor) {
                     if (timerQueue.empty()) {
                         auto resultTime = task->getStartTime() + std::chrono::milliseconds(configuration.getTimeout());
                         auto secs = std::chrono::time_point_cast<std::chrono::seconds>(resultTime);
-                        auto ns = std::chrono::time_point_cast<std::chrono::nanoseconds>(resultTime) - std::chrono::time_point_cast<std::chrono::nanoseconds>(secs);
+                        auto nanosecs = std::chrono::time_point_cast<std::chrono::nanoseconds>(resultTime) - std::chrono::time_point_cast<std::chrono::nanoseconds>(secs);
 
                         struct itimerspec new_value {};
 
                         new_value.it_value.tv_sec = secs.time_since_epoch().count();
-                        new_value.it_value.tv_nsec = ns.count();
+                        new_value.it_value.tv_nsec = nanosecs.count();
 
                         if (-1 == timerfd_settime(central_timer_fd, TFD_TIMER_ABSTIME, &new_value, nullptr)) {
                             syslog(LOG_DEBUG, "Could not reset timer: %s", strerror(errno));
@@ -774,16 +774,16 @@ void Queue::worker_executor(uint16_t processor) {
                     timerQueue.emplace(timerGuard);
                 }
 
-                ev.events = EPOLLIN;
-                ev.data.fd = task->getSocket();
+                event.events = EPOLLIN;
+                event.data.fd = task->getSocket();
 
-                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, task->getSocket(), &ev) == -1) {
+                if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, task->getSocket(), &event) == -1) {
                     is_running = false;
                     syslog(LOG_ERR, "Could not add socket to epoll_ctl: %s", strerror(errno));
                     return;
                 }
 
-                syslog(LOG_DEBUG, "Added a new socket identifier to the epoll queue: %d", ev.data.fd);
+                syslog(LOG_DEBUG, "Added a new socket identifier to the epoll queue: %d", event.data.fd);
 
                 resolverTasks[task->getSocket()] = std::move(task);
                 initialTasks.erase(iter++);

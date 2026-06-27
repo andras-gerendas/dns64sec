@@ -1,3 +1,4 @@
 .vscode
 dns64sec
 *.o
+config

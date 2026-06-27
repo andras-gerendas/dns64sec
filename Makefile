@@ -19,7 +19,7 @@ astyle:
 	astyle -C -S -f $(SOURCES) $(HEADERS)
 
 tidy:
-	clang-tidy $(SOURCES) -header-filter=.* -checks='*',-hicpp-vararg,-cppcoreguidelines-pro-type-vararg,-fuchsia-default-arguments-declarations,-fuchsia-trailing-return,-fuchsia-default-arguments-calls,-hicpp-avoid-c-arrays,-modernize-avoid-c-arrays,-cppcoreguidelines-avoid-c-arrays,-fuchsia-overloaded-operator,-llvm-header-guard,-cppcoreguidelines-pro-type-reinterpret-cast -extra-arg=-std=c++17 -extra-arg=-I$(INC_DIR)
+	clang-tidy $(SOURCES) -header-filter=.* -checks='*',-llvmlibc-*,-hicpp-vararg,-cppcoreguidelines-pro-type-vararg,-fuchsia-default-arguments-declarations,-fuchsia-trailing-return,-fuchsia-default-arguments-calls,-hicpp-avoid-c-arrays,-modernize-avoid-c-arrays,-cppcoreguidelines-avoid-c-arrays,-fuchsia-overloaded-operator,-llvm-header-guard,-cppcoreguidelines-pro-type-reinterpret-cast -extra-arg=-std=c++17 -extra-arg=-I$(INC_DIR)
 
 $(TARGET): $(OBJECTS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS)
