@@ -9,7 +9,8 @@
  *
  */
 
-#pragma once
+#ifndef DNS64SEC_TASK_H
+#define DNS64SEC_TASK_H
 
 #include "Configuration.h"
 #include "DnsMessage.h"
@@ -49,10 +50,21 @@ enum class TaskState : uint8_t {
  */
 enum class DnssecState : uint8_t {
     NON_DNSSEC,
+    PREPARE_DNSSEC,
     DNSKEY_REQUEST,
     PREPARE_DNSKEY,
     DNSKEY_RESPONSE,
-    DS_REQUEST,
+    NS_LIST_REQUEST,
+    PREPARE_NS_LIST,
+    NS_LIST_RESPONSE,
+    NS_AAAA_REQUEST,
+    PREPARE_NS_AAAA,
+    NS_AAAA_RESPONSE,
+    NS_A_REQUEST,
+    PREPARE_NS_A,
+    NS_A_RESPONSE,
+    DS_AAAA_REQUEST,
+    DS_A_REQUEST,
     PREPARE_DS,
     DS_RESPONSE
 };
@@ -64,9 +76,25 @@ enum class DnssecState : uint8_t {
 enum class BufferType : uint8_t {
     REQUEST_BUFFER,
     ANSWER_BUFFER,
-    DNSKEY_BUFFER,
+    COPY_BUFFER,
+    KEY_REQUEST_BUFFER,
+    KEY_ANSWER_BUFFER,
+    LIST_BUFFER,
+    ADDRESS_BUFFER,
     DS_BUFFER,
     FORGED_BUFFER
+};
+
+enum class SocketType : uint8_t {
+    RESOLVER_SOCKET,
+    DELEGATION_SOCKET
+};
+
+enum class SocketCreationResult : uint8_t {
+    SUCCESS,
+    CREATION_FAILURE,
+    RECEIVE_TIMEOUT_FAILURE,
+    SEND_TIMEOUT_FAILURE
 };
 
 class Task {
@@ -85,8 +113,8 @@ class Task {
          */
         struct greaterComparator {
             auto operator() (const timer_guard &timer1, const timer_guard &timer2) -> bool {
-                Task *first = *timer1;
-                Task *second = *timer2;
+                const Task *first = *timer1;
+                const Task *second = *timer2;
 
                 if (nullptr == first) {
                     return false;
@@ -157,40 +185,64 @@ class Task {
         int query_socket{-1};
 
         /**
+         * @brief The socket used for performing delegation follow-up
+         * 
+         */
+        int delegation_socket{-1};
+
+        /**
          * @brief The buffer possibly containing the request
          *
          */
-        std::unique_ptr<uint8_t[]> req_buffer;
+        DnsMessage request_buffer;
 
         /**
          * @brief The buffer possibly containing an answer
          *
          */
-        std::unique_ptr<uint8_t[]> ans_buffer;
+        DnsMessage answer_buffer;
+
+        /**
+         * @brief The buffer possibly containing a copy of the request
+         *
+         */
+        DnsMessage copy_buffer;
+
+        /**
+         * @brief The buffer possibly containing a DNSKEY/NS_LIST request
+         *
+         */
+        DnsMessage key_request_buffer;
 
         /**
          * @brief The buffer possibly containing a DNSKEY answer
          *
          */
-        std::unique_ptr<uint8_t[]> dnskey_buffer;
+        DnsMessage key_answer_buffer;
+
+        /**
+         * @brief The buffer possibly containing an NS_LIST answer
+         *
+         */
+        DnsMessage list_buffer;
+
+        /**
+         * @brief The buffer possibly containing an address
+         * 
+         */
+        DnsMessage address_buffer;
 
         /**
          * @brief The buffer possibly containing a DS answer
          *
          */
-        std::unique_ptr<uint8_t[]> ds_buffer;
+        DnsMessage ds_buffer;
 
         /**
          * @brief The buffer possibly containing a forged DNS64 message
          *
          */
-        std::unique_ptr<uint8_t[]> forged_buffer;
-
-        /**
-         * @brief The sender of the original query
-         *
-         */
-        struct sockaddr_in6 sender {};
+        DnsMessage forged_buffer;
 
         /**
          * @brief The length of the sender of the original query
@@ -199,28 +251,16 @@ class Task {
         socklen_t sender_length{};
 
         /**
-         * @brief The length of the received packet
+         * @brief The sender of the original query
          *
          */
-        ssize_t receive_length{};
+        struct sockaddr_in6 sender {};
 
         /**
-         * @brief The length of the received DNSKEY answer
-         *
+         * @brief Storage holding the address for delegation
+         * 
          */
-        ssize_t dnskey_receive_length{};
-
-        /**
-         * @brief The length of the received DS answer
-         *
-         */
-        ssize_t ds_receive_length{};
-
-        /**
-         * @brief The length of the received answer
-         *
-         */
-        ssize_t answer_receive_length{};
+        struct sockaddr_storage delegation_address {};
 
         /**
          * @brief The state the task will be in after a successful receive or send operation
@@ -259,6 +299,18 @@ class Task {
         BufferType currentBuffer{BufferType::REQUEST_BUFFER};
 
         /**
+         * @brief The type of buffer used for RRSig validation
+         * 
+         */
+        BufferType rrsigBuffer{BufferType::REQUEST_BUFFER};
+
+        /**
+         * @brief The type of the currently used request socket
+         * 
+         */
+        SocketType socketType{SocketType::RESOLVER_SOCKET};
+
+        /**
          * @brief The current UDP payload size (and thus maximum buffer size) used
          *
          */
@@ -282,13 +334,21 @@ class Task {
          */
         DnsMessage::RecordType originalQueryType{DnsMessage::RecordType::NO_VALUE};
     public:
-        Task(const Configuration &configuration, int receiver_socket, std::unique_ptr<uint8_t[]> buffer, struct sockaddr_in6 sender, socklen_t sender_length, ssize_t receive_length) :
-            configuration(configuration), receiver_socket(receiver_socket), req_buffer(std::move(buffer)), sender(sender), sender_length(sender_length), receive_length(receive_length),
-            udpPayloadSize(configuration.getUdpPayloadSize()) {
+        Task(const Configuration &configuration, int receiver_socket, std::unique_ptr<uint8_t[]> buffer, socklen_t sender_length, struct sockaddr_in6 sender, ssize_t receive_length) :
+            configuration(configuration), receiver_socket(receiver_socket), request_buffer(std::move(buffer), configuration.getUdpPayloadSize(), receive_length),
+            sender_length(sender_length), sender(sender), udpPayloadSize(configuration.getUdpPayloadSize()) {
+            start_time = std::chrono::steady_clock::now();
+        }
+        explicit Task(const Configuration &configuration, ssize_t receive_length = DnsMessage::DNS_HEADER_LENGTH) : configuration(configuration),
+            request_buffer(configuration.getUdpPayloadSize(), receive_length), udpPayloadSize(configuration.getUdpPayloadSize()) {
             start_time = std::chrono::steady_clock::now();
         }
         Task(const Task&) = delete;
         auto operator=(const Task&) -> Task& = delete;
+
+        [[nodiscard]] auto getCurrentAttempt() const -> uint16_t {
+            return attempt;
+        }
 
         /**
          * @brief Compares the current time to the start time of the task
@@ -349,6 +409,8 @@ class Task {
             central_socket_fd = socket;
         }
 
+        auto createSocket(const sockaddr_storage &address, int *socket_descriptor) -> SocketCreationResult;
+
         /**
          * @brief Resets the start time to the current time and pushes its timer guard into the queue (if the timer is not armed, it arms the timer)
          *
@@ -387,6 +449,42 @@ class Task {
             return true;
         }
 
+        auto handleNextResolverState() -> bool;
+
+        auto handleInitialState() -> bool;
+
+        auto handleCreateSocketState() -> bool;
+
+        auto handleSendPacketState() -> bool;
+
+        auto handleReceivePacketState() -> bool;
+
+        auto handleFirstAnswerState() -> bool;
+
+        auto handleARequestSentState() -> bool;
+
+        auto handlePrepareDnssecState() -> bool;
+
+        auto handleDnskeyRequestState() -> bool;
+
+        auto handleDnskeyResponseState() -> bool;
+
+        auto handleNsListRequestState() -> bool;
+
+        auto handleNsListResponseState() -> bool;
+
+        auto handleNsAaaaRequestState() -> bool;
+
+        auto handleNsAaaaResponseState() -> bool;
+
+        auto handleNsARequestState() -> bool;
+
+        auto handleNsAResponseState() -> bool;
+
+        auto handleDsRequest() -> bool;
+
+        auto handleDsResponse() -> bool;
+
         /**
          * @brief Attempts to execute the current state of the task and push it to the next one
          *
@@ -409,12 +507,44 @@ class Task {
             this->state = state;
         }
 
+        [[nodiscard]] auto getNextState() const -> TaskState {
+            return nextState;
+        }
+
+        [[nodiscard]] auto getDnssecState() const -> DnssecState {
+            return dnssecState;
+        }
+
+        void setDnssecState(DnssecState dnssecState) {
+            this->dnssecState = dnssecState;
+        }
+
+        [[nodiscard]] auto getDnssecNextState() const -> DnssecState {
+            return nextDnssecState;
+        }
+
+        [[nodiscard]] auto getCurrentBuffer() -> DnsMessage * {
+            return getBufferByType(currentBuffer);
+        }
+
+        [[nodiscard]] auto getCurrentBufferType() const -> BufferType {
+            return currentBuffer;
+        }
+
+        void setRrsigBuffer(BufferType type) {
+            rrsigBuffer = type;
+        }
+
         [[nodiscard]] auto getCurrentQr() const -> DnsMessage::QrType {
             return currentQr;
         }
 
         [[nodiscard]] auto getSocket() const -> int {
             return query_socket;
+        }
+
+        [[nodiscard]] auto getDelegationSocket() const -> int {
+            return delegation_socket;
         }
 
         [[nodiscard]] auto getCurrentResolver() const -> int {
@@ -440,7 +570,9 @@ class Task {
          */
         auto receivePacket(BufferType type) -> bool;
 
-        auto getBufferByType(BufferType type) -> uint8_t *;
+        auto getBufferByType(BufferType type) -> DnsMessage *;
+
+        void setBufferByType(BufferType type, std::unique_ptr<uint8_t[]> buffer, ssize_t capacity = DnsMessage::DNS_HEADER_LENGTH);
 
         /**
          * @brief Sends a message using the specified buffer with the specified target
@@ -456,5 +588,11 @@ class Task {
             if (query_socket > -1) {
                 close(query_socket);
             }
+
+            if (delegation_socket > -1) {
+                close(delegation_socket);
+            }
         }
 };
+
+#endif // DNS64SEC_TASK_H

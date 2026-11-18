@@ -9,7 +9,8 @@
  *
  */
 
-#pragma once
+#ifndef DNS64SEC_CONFIGURATION_H
+#define DNS64SEC_CONFIGURATION_H
 
 #include <arpa/inet.h>
 #include <chrono>
@@ -24,11 +25,11 @@ class Configuration {
          * @brief Logging level of the program
          *
          */
-        enum class LogLevel {
-            ERR,
-            WARN,
-            INFO,
-            DEBUG
+        enum class LogLevel : uint8_t {
+            ERR = 0,
+            WARN = 1,
+            INFO = 2,
+            DEBUG = 3
         };
 
         /**
@@ -36,6 +37,12 @@ class Configuration {
          *
          */
         static constexpr uint16_t MAX_NON_EDNS_PACKET = 512U;
+
+        /**
+         * @brief The DNS port used when contacting delegators
+         * 
+         */
+        static constexpr uint16_t DELEGATION_DNS_PORT = 53U;
     private:
         /**
          * @brief The default file descriptor limit to be used as maximum file descriptor count
@@ -254,13 +261,6 @@ class Configuration {
         rlim_t fdLimit{ARG_DEFAULT_FD_LIMIT};
 
         /**
-         * @brief Attempts to convert the textual representation of a resolver to the sockaddr structure, storing it as an external resolver
-         *
-         * @param resolver The IPv4 or IPv6 address of a resolver
-         */
-        void addResolver(const std::string &resolver);
-
-        /**
          * @brief Parses the already opened configuration file, line by line
          *
          * @param fileStream The already opened configuration file object
@@ -339,6 +339,19 @@ class Configuration {
 
     public:
         /**
+         * @brief Attempts to convert the textual representation of a resolver to the sockaddr structure, storing it as an external resolver
+         *
+         * @param resolver The IPv4 or IPv6 address of a resolver
+         */
+        void addResolver(const std::string &resolver);
+
+        /**
+         * @brief Removes external resolvers
+         * 
+         */
+        void clearResolvers();
+
+        /**
          * @brief Loads the configuration into the member variables.
          *
          * @return true The configuration was successfully loaded, or the default configuration is applied.
@@ -400,12 +413,20 @@ class Configuration {
             return attempts;
         }
 
+        void setAttempts(uint16_t attempts) {
+            this->attempts = attempts;
+        }
+
         [[nodiscard]] auto getTimeout() const -> std::chrono::milliseconds {
             return timeout;
         }
 
         [[nodiscard]] auto getUdpPayloadSize() const -> uint16_t {
             return udpPayloadSize;
+        }
+
+        void setUdpPayloadSize(uint16_t udpPayloadSize) {
+            this->udpPayloadSize = udpPayloadSize;
         }
 
         [[nodiscard]] auto isDnssecEnforced() const -> bool {
@@ -440,6 +461,10 @@ class Configuration {
             this->configFile = std::move(configFile);
         }
 
+        void setDnssecValidation(bool isDnssecValidated) {
+            this->validateDnssec = isDnssecValidated;
+        }
+
         [[nodiscard]] auto getFdLimit() const -> rlim_t {
             return fdLimit;
         }
@@ -448,3 +473,5 @@ class Configuration {
             this->fdLimit = fdLimit;
         }
 };
+
+#endif // DNS64SEC_CONFIGURATION_H

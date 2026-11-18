@@ -74,8 +74,19 @@ auto main(int argc, char * argv[]) -> int {
 
     queue.init();
 
-    signal(SIGTERM, signal_handler);
-    signal(SIGHUP, signal_handler);
+    if (SIG_ERR == signal(SIGTERM, signal_handler)) {
+        queue.halt();
+        syslog(LOG_ERR, "Could not set SIGTERM signal handler");
+
+        return EXIT_FAILURE;
+    }
+
+    if (SIG_ERR == signal(SIGHUP, signal_handler)) {
+        queue.halt();
+        syslog(LOG_ERR, "Could not set SIGHUP signal handler");
+
+        return EXIT_FAILURE;
+    }
 
     while (true) {
         std::this_thread::sleep_for(1s);

@@ -9,7 +9,8 @@
  *
  */
 
-#pragma once
+#ifndef DNS64SEC_QUEUE_H
+#define DNS64SEC_QUEUE_H
 
 #include "Task.h"
 
@@ -265,3 +266,5 @@ class Queue {
             }
         }
 };
+
+#endif // DNS64SEC_QUEUE_H

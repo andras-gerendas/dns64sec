@@ -58,7 +58,7 @@ timeout: 1000
 - Default value: false
 - Type: boolean (true/false)
 
-### ignore_resolvers_file
+### ignore_resolver_file
 
 - Meaning: Whether the resolver file containing the name servers is not parsed, not taking the used resolvers from that file.
 - Default value: false

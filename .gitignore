@@ -2,3 +2,8 @@
 dns64sec
 *.o
 config
+utest
+*.gcda
+*.gcno
+*.gcov
+coverage.*

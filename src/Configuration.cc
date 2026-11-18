@@ -45,6 +45,10 @@ void Configuration::addResolver(const std::string& resolver) {
     externalResolvers.emplace_back(addr);
 }
 
+void Configuration::clearResolvers() {
+    externalResolvers.clear();
+}
+
 auto Configuration::parseLine(const std::string_view &haystack, const std::string_view &needle,  bool *isFound, bool hasColon) -> std::string {
     std::string result;
 

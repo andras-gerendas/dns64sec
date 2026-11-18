@@ -117,9 +117,9 @@ void Queue::bind_to_processor(std::thread *thread, uint16_t processor) {
     CPU_ZERO(&cpuset);
     CPU_SET(processor, &cpuset);
 
-    const int rc = pthread_setaffinity_np(thread->native_handle(), sizeof(cpu_set_t), &cpuset);
+    const int result = pthread_setaffinity_np(thread->native_handle(), sizeof(cpu_set_t), &cpuset);
 
-    if (rc != 0) {
+    if (result != 0) {
         /* Non-fatal issue */
         syslog(LOG_ERR, "Could not set affinity for processor: %u", processor);
     }
@@ -245,10 +245,10 @@ void Queue::receiver_executor(uint16_t processor, uint16_t thread_id) {
                 }
 
                 if (Configuration::LogLevel::DEBUG == configuration.getLogLevel()) {
-                    syslog(LOG_DEBUG, "Received a frame on processor %u from port %u", processor, htons(sender.sin6_port));
+                    syslog(LOG_DEBUG, "Received a frame on processor %u from port %u", processor, ntohs(sender.sin6_port));
                 }
 
-                localQueue.emplace(new Task{configuration, socket, std::move(buffer), sender, sender_length, receive_length});
+                localQueue.emplace(new Task{configuration, socket, std::move(buffer), sender_length, sender, receive_length});
 
                 /* Avoiding an allocation if timeout occurs during receive */
                 buffer = std::make_unique<uint8_t[]>(configuration.getUdpPayloadSize());
@@ -261,7 +261,7 @@ void Queue::receiver_executor(uint16_t processor, uint16_t thread_id) {
 
         queue_mutexes[thread_id]->lock();
 
-        const int current_task_count = task_counters[thread_id];
+        const uint32_t current_task_count = task_counters[thread_id];
 
         while (!localQueue.empty()) {
             task_queues[thread_id].emplace(std::move(localQueue.front()));
@@ -316,6 +316,7 @@ void Queue::worker_executor(uint16_t processor) {
 
     std::list<std::unique_ptr<Task> > initialTasks;
     std::map<int, std::unique_ptr<Task> > resolverTasks;
+    std::map<int, int> subTasks;
 
     const int epoll_fd = epoll_create1(EPOLL_CLOEXEC);
 
@@ -509,10 +510,31 @@ void Queue::worker_executor(uint16_t processor) {
 
             auto taskIterator = resolverTasks.find(eventfd);
 
+            if (taskIterator == resolverTasks.end()) {
+                auto subTaskIterator = subTasks.find(eventfd);
+
+                if (subTaskIterator != subTasks.end()) {
+                    taskIterator = resolverTasks.find(subTasks[eventfd]);
+                }
+            }
+
             if (taskIterator != resolverTasks.end()) {
                 auto &task = taskIterator->second;
 
                 task->handleStateWrapper();
+
+                if (task->getDnssecState() == DnssecState::PREPARE_DS) {
+                    event.events = EPOLLIN;
+                    event.data.fd = task->getDelegationSocket();
+
+                    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, task->getDelegationSocket(), &event) == -1) {
+                        is_running = false;
+                        syslog(LOG_ERR, "Could not add socket to epoll_ctl: %s", strerror(errno));
+                        return;
+                    }
+
+                    subTasks[task->getDelegationSocket()] = task->getSocket();
+                }
 
                 if (TaskState::FINISHED == task->getState()) {
                     /* TODO: The initial tasks can be iterated here to handle a createSocket if socket exhaustion is a problem */
@@ -561,7 +583,7 @@ void Queue::worker_executor(uint16_t processor) {
 
                 const std::lock_guard<std::mutex> lock{*queue_mutexes[currentReceiver]};
 
-                const int current_task_count = task_counters[currentReceiver];
+                const uint32_t current_task_count = task_counters[currentReceiver];
 
                 if (removedTasks > effectiveLimit) {
                     removedTasks = effectiveLimit;
@@ -695,7 +717,7 @@ void Queue::worker_executor(uint16_t processor) {
             }
 
             if (!timerQueue.empty()) {
-                Task *task = *timerQueue.top();
+                const Task *task = *timerQueue.top();
 
                 auto resultTime = task->getStartTime() + std::chrono::milliseconds(configuration.getTimeout());
                 auto secs = std::chrono::time_point_cast<std::chrono::seconds>(resultTime);
